@@ -1,6 +1,7 @@
 import numpy as np
 from tqdm import tqdm  # Progress bar
 from numpy.linalg import inv, det
+from scipy.linalg import solve
 import pandas as pd
 from scipy.special import iv  # Modified Bessel function of the first kind
 
@@ -21,6 +22,26 @@ ccg = np.array(
         "Bmal1",
     ]
 )
+
+
+def ind2(large_list, small_list, verbose=False):
+    if isinstance(small_list, str):
+        small_list = [small_list]
+    large_array = np.array(large_list)
+    small_array = np.array(small_list)
+    indices = []
+
+    element_to_index = {element: idx for idx, element in enumerate(large_array)}
+
+    for element in small_array:
+        if element in element_to_index:
+            indices.append(element_to_index[element])
+        else:
+            # Optionally handle or notify when an element is not found
+            if verbose:
+                print(f"Warning: '{element}' not found in the large list.")
+
+    return indices
 
 
 def CHIRAL(
@@ -83,8 +104,10 @@ def CHIRAL(
     genes = E_full.var_names
 
     # Clock gene selection
-    clock_coord = [i for i, gene in enumerate(genes) if gene in clockgenes]
+    clock_coord = ind2(genes, clockgenes)
     E = E[:, clock_coord]
+
+    N, Ng = E.shape
 
     # Mean center the expression data if needed
     if mean_centre_E:
@@ -96,7 +119,7 @@ def CHIRAL(
     if u is None:
         u = 0.2
     if tau2 is None:
-        tau2 = 4 / (24 + E.shape[1])
+        tau2 = 4 / (24 + E.shape[0])
 
     phi = phi_start
 
@@ -105,16 +128,19 @@ def CHIRAL(
         # Use the spin glass initialization (for now, we skip implementation of J.tilde and Zeta.mf.ordered)
         beta = 1000
         J = J_tilde(E)  # Placeholder function, needs definition
+        ##################
+        # There a re changes here, in both next lines, put to avoid
+        ##################
         Zeta = Zeta_mf_ordered(J, beta, E.shape[0])
-        phi = Zeta[:, 1] + np.random.uniform(-0.5, 0.5, size=E.shape[1])
+        phi = Zeta[:, 1]  # + np.random.uniform(-0.5, 0.5, size=E.shape[0])
 
     # Initialize matrices for the EM procedure
-    Ng, N = E.shape
+
     sigma2_0 = sigma2
     T = np.diag([u**2, tau2, tau2])
 
     # Precompute some variables used in the EM loop
-    S = np.array([np.outer(E[l, :], E[l, :]) for l in range(Ng)])
+    S = np.array([np.outer(E[:, l], E[:, l]) for l in range(Ng)])
     W = np.ones(Ng)
 
     # Set up progress bar if requested
@@ -123,49 +149,221 @@ def CHIRAL(
 
     # Start EM iterations
     for i in range(iterations):
-        # Store old values for convergence check
         phi_old = phi.copy()
 
-        # Update alpha and weight parameters (detailed matrix calculations, skipped for now)
-        # --- Omitted for simplicity ---
+        # Trigonometric components based on the current phi values
+        cos_phi = np.cos(phi)
+        sin_phi = np.sin(phi)
 
-        # Check for convergence
-        if np.max(np.abs(phi - phi_old)) < 0.001:
-            if pbar:
-                print("\nAlgorithm has converged.")
-            return {
-                "phi": phi,
-                "sigma": sigma2,
-                "alpha": None,  # Placeholder
-                "weights": W,
-                "iteration": i,
-                "sigma_m1": sigma2_0,  # Placeholder
-                "E_full": E_full,
-            }
+        # Design matrix X with columns: [1, cos(phi), sin(phi)]
+        X = np.column_stack((np.ones(N), cos_phi, sin_phi))
 
-        # Update for the next EM step
-        phi = (phi + np.random.normal(0, 0.1, size=phi.shape)) % (2 * np.pi)
+        # Matrix multiplication and inversion for parameter updates
+        Nn = X.T @ X  # This is t(X) %*% X in R
+        Nn_inv = inv(Nn)  # Inverse of Nn
 
-        # Update progress bar
-        if pbar:
-            progress_bar.update(1)
+        T_inv = inv(T)  # Inverse of the T matrix
+        M = Nn + sigma2 * T_inv  # M = Nn + sigma2 * Tinv
+        M_inv = inv(M)  # Inverse of M
 
-    # Close progress bar if it was used
-    if pbar:
-        progress_bar.close()
+        # Update the alpha parameters
+        alpha = M_inv @ X.T @ E
+        alpha = alpha.T  # Transpose back to match R's convention
 
-    return {
-        "phi": phi,
-        "sigma": sigma2,
-        "alpha": None,  # Placeholder
-        "weights": W,
-        "iteration": iterations,
-        "sigma_m1": sigma2_0,  # Placeholder
-        "E_full": E_full,
-    }
+        # If two-state model is off, reset weights to initial values
+        if not TSM:
+            W = np.ones(Ng)
+
+        Tot = np.sum(W)  # Total sum of weights
+
+        # Calculate intermediate variables for matrix K
+        A = np.sum(W * (alpha[:, 1] ** 2 / sigma2 + M_inv[1, 1])) / Tot
+        B = np.sum(W * (alpha[:, 1] * alpha[:, 2] / sigma2 + M_inv[1, 2])) / Tot
+        C = np.sum(W * (alpha[:, 2] * alpha[:, 1] / sigma2 + M_inv[2, 1])) / Tot
+        D = np.sum(W * (alpha[:, 2] ** 2 / sigma2 + M_inv[2, 2])) / Tot
+
+        # Construct matrix K
+        K = np.array([[A, B], [C, D]])
+
+        # Return early if any elements of K are NaN
+        if np.any(np.isnan(K)):
+            return {"alpha": alpha, "weights": W, "iteration": i}
+
+        # Calculate al and be, which depend on the current weight values and alpha
+        al = np.apply_along_axis(
+            lambda x: np.sum(
+                W * (alpha[:, 1] * (x - alpha[:, 0]) / sigma2 - M_inv[0, 1])
+            )
+            / Tot,
+            1,
+            E,
+        )
+        be = np.apply_along_axis(
+            lambda x: np.sum(
+                W * (alpha[:, 2] * (x - alpha[:, 0]) / sigma2 - M_inv[0, 2])
+            )
+            / Tot,
+            1,
+            E,
+        )
+
+        # Create matrix O
+        O = np.vstack([al, be])
+
+        # Ensure no NaN values in O
+        if np.any(np.isnan(O)):
+            return {"alpha": alpha, "weights": W, "iteration": i}
+
+        # Find numerical roots of the polynomial obtained from Lagrange multipliers
+        def find_roots(x):
+            zero = (
+                B**2 * C**2
+                + A**2 * D**2
+                - x[0] ** 2 * (D**2 + C**2)
+                - x[1] ** 2 * (A**2 + B**2)
+                + 2 * x[0] * x[1] * (A * B + C * D)
+                - 2 * A * B * C * D
+            )
+            one = 2 * (
+                (A + D) * (A * D - B * C)
+                - x[0] ** 2 * D
+                - x[1] ** 2 * A
+                + x[0] * x[1] * (B + C)
+            )
+            two = A**2 + D**2 + 4 * A * D - x[0] ** 2 - x[1] ** 2 - 2 * B * C
+            three = 2 * (A + D)
+            four = 1
+
+            # Roots of the polynomial (use numpy roots for equivalent of polyroot)
+            return np.roots([zero, one, two, three, four])
+
+        # Apply find_roots function for each column of O
+        rooted = np.apply_along_axis(find_roots, 0, O)
+
+        # Test roots to find the minimum (corresponds to the minimum of the Q function)
+        ze = []
+        for j in range(N):
+            possible_solutions = []
+            for y in rooted[:, j]:
+                if np.abs(np.imag(y)) > 1e-8:
+                    continue  # Skip complex roots
+                y = np.real(y)
+
+                K_lambda = K + np.eye(2) * y
+                zet = solve(K_lambda, O[:, j])  # Solve the system of equations
+
+                phit = np.arctan2(zet[1], zet[0]) % (2 * np.pi)
+                Xt = np.array([1, np.cos(phit), np.sin(phit)])
+                Mt = np.outer(Xt, Xt)
+
+                Xt_old = np.array([1, np.cos(phi_old[j]), np.sin(phi_old[j])])
+                Mt_old = np.outer(Xt_old, Xt_old)
+
+                # Compute the Q function for each root
+                Qs = np.array(
+                    [
+                        alpha[k] @ Mt @ alpha[k]
+                        ############################
+                        - 2 * alpha[k] @ Xt * E[j, k]
+                        + sigma2 * np.sum(np.diag(M_inv @ Mt))
+                        for k in range(Ng)
+                    ]
+                )
+                Qs_old = np.array(
+                    [
+                        alpha[k] @ Mt_old @ alpha[k]
+                        - 2 * alpha[k] @ Xt_old * E[j, k]
+                        + sigma2 * np.sum(np.diag(M_inv @ Mt_old))
+                        for k in range(Ng)
+                    ]
+                )
+
+                Q = np.sum(Qs * W / sigma2) / Tot
+                Q_old = np.sum(Qs_old * W / sigma2) / Tot
+
+                possible_solutions.append(np.hstack((zet, Q, Q_old)))
+
+            # Find the solution that minimizes the Q function
+            solutions = np.vstack(possible_solutions)
+            min_index = np.argmin(solutions[:, 2])
+            if solutions[min_index, 2] == 1e5:
+                raise ValueError(f"No solution found on the circle at iteration {i}")
+
+            ze.append(solutions[min_index, :])
+
+        # Update phi using the best root solutions
+        ze = np.array(ze).T
+        phi = np.arctan2(ze[1, :], ze[0, :]) % (2 * np.pi)
+
+        # Update weights
 
 
-# Helper function definitions (J_tilde and Zeta_mf_ordered) should be added for completeness.
+# ADD THIS PART
+
+# Qhist = pd.DataFrame()  # Empty DataFrame to store Qhist
+
+#     for i in range(iterations):
+#         # `ze` matrix construction
+#         ze = np.array(ze).reshape(8, N)  # Equivalent of matrix(unlist(ze), 8, N)
+
+#         # Set rownames equivalent in Python (using Pandas DataFrame)
+#         ze_df = pd.DataFrame(ze.T, columns=["cos", "sin", "Q", "Q.old", "Q1", "Q2", "Q3", "Q4"])
+#         phi = np.arctan2(ze_df['sin'], ze_df['cos']) % (2 * np.pi)
+
+#         # Store Qhist on the first iteration
+#         if i == 0:
+#             Qhist = ze_df.copy()
+#             Qhist['iteration'] = i + 1  # Iteration column
+#             Qhist['sample'] = np.arange(1, N + 1)  # Sample numbers starting from 1
+#         else:
+#             Qtemp = ze_df.copy()
+#             Qtemp['iteration'] = i + 1
+#             Qtemp['sample'] = np.arange(1, N + 1)
+#             Qhist = pd.concat([Qhist, Qtemp])  # Append the new iteration results
+
+#         # Update weights W
+#         P1_0 = np.array([np.exp(E[p, :] @ X @ Minv @ X.T @ E[p, :].T / (2 * sigma2)) * np.sqrt(dTinv * sigma2**3 / np.linalg.det(M)) for p in range(Ng)])
+#         W = q * P1_0 / (1 - q + q * P1_0)
+#         W[np.isnan(W)] = 1  # Replace NaN with 1
+
+#         # Exit the loop if convergence is reached
+#         if np.max(np.abs(phi - phi_old)) < 0.001:
+#             if pbar:
+#                 print("\nAlgorithm has converged\n")
+#             return {
+#                 "phi": phi, "sigma": sigma2, "alpha": alpha, "weights": W,
+#                 "iteration": i + 1, "sigma.m1": sigma2_m1, "E": E_full, "Qhist": Qhist, "geni": geni
+#             }
+
+#         # Update parameters for the next EM step
+#         cos_phi = np.cos(phi)
+#         sin_phi = np.sin(phi)
+#         X = np.column_stack((np.ones(len(phi)), cos_phi, sin_phi))  # Equivalent of cbind(1, cos(phi), sin(phi))
+
+#         Mold = Nn + sigma2 * Tinv
+#         Moldinv = np.linalg.inv(Mold)  # Inverse of Mold
+
+#         # Update sigma2.m1
+#         sigma2_m1 = np.array([np.sum(np.diag(S[s] - S[s] @ Xold @ Moldinv @ X.T)) / N + 0.01 for s in range(Ng)])
+#         sigma2_m0 = np.var(E, axis=1)
+#         sigma2 = np.mean(sigma2_m1 * W + sigma2_m0 * (1 - W))
+#         sigma2_m1 = np.sum(sigma2_m1 * W) / np.sum(W)
+
+#         # Update q if needed
+#         if update_q:
+#             q = np.mean(W)
+#             q = max(0.05, min(q, 0.3))
+
+#         if pbar:
+#             print(f"Iteration {i + 1} completed")
+
+#     if pbar:
+#         print("\nEM algorithm finished after maximum iterations\n")
+
+#     return {
+#         "phi": phi, "Qhist": Qhist, "sigma": sigma2, "alpha": alpha, "weights": W,
+#         "iteration": iterations, "sigma.m1": sigma2_m1, "E": E_full
+#     }
 
 
 def J_tilde(E, n_genes=0, n_samples=0):
@@ -218,7 +416,8 @@ def Zeta_mf_ordered(J, beta, n_samples, A_0=0.1, iterations=1000):
         numpy.ndarray: Matrix containing amplitudes (A) and phases (Theta).
     """
     A = np.full(n_samples, A_0)
-    Theta = np.random.uniform(0, 2 * np.pi, n_samples)
+    # Theta = np.random.uniform(0, 2 * np.pi, n_samples)
+    Theta = np.linspace(0, 2 * np.pi, n_samples)
 
     for _ in range(iterations):
         A_cos = A * np.cos(Theta)
