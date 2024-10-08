@@ -228,5 +228,11 @@ def find_roots(x, A, B, C, D):
     three = 2 * (A + D)
     four = 1
 
+    print("zero", zero)
+    print("one", one)
+    print("two", two)
+    print("three", three)
+    print("four", four)
+
     # Roots of the polynomial (use numpy roots for equivalent of polyroot)
-    return np.roots([zero, one, two, three, four])
+    return np.roots([four, three, two, one, zero])

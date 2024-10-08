@@ -21,7 +21,7 @@ phi = res["phi"]
 
 plt.scatter(true_phase, phi)
 
-
+# np.apply_along_axis
 # create a pd.dataframe that I will import in R
 # df = pd.DataFrame(
 #     adata.layers["s_log"].T, index=adata.var_names, columns=adata.obs_names

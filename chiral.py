@@ -157,7 +157,9 @@ def CHIRAL(
             possible_solutions = []
             for y in rooted[:, j]:
                 if np.abs(np.imag(y)) > 1e-8:
-                    continue  # Skip complex roots
+                    possible_solutions.append(np.array([0, 0, 100000, 100000]))
+                    continue
+
                 y = np.real(y)
 
                 K_lambda = K + np.eye(2) * y
@@ -253,7 +255,7 @@ def CHIRAL(
                 "alpha": alpha,
                 "weights": W,
                 "iteration": i + 1,
-                "sigma.m1": sigma2_m1,
+                # "sigma.m1": sigma2_m1,
                 "E": E_full,
                 "Qhist": Qhist,
                 "geni": clockgenes,
