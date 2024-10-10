@@ -94,8 +94,8 @@ def Zeta_mf_ordered(J, beta, n_samples, A_0=0.1, iterations=1000):
         numpy.ndarray: Matrix containing amplitudes (A) and phases (Theta).
     """
     A = np.full(n_samples, A_0)
-    # Theta = np.random.uniform(0, 2 * np.pi, n_samples)
-    Theta = np.linspace(0, 2 * np.pi, n_samples)
+    Theta = np.random.uniform(0, 2 * np.pi, n_samples)
+    # Theta = np.linspace(0, 2 * np.pi, n_samples)
 
     for _ in range(iterations):
         A_cos = A * np.cos(Theta)
@@ -161,78 +161,3 @@ def process_expression_data(
     return E, E_full, clock_coord, N, Ng
 
 
-def EM_initialization(E, sigma2=None, u=None, tau2=None, iterations=100):
-    """
-    Initializes parameters for a probabilistic model.
-
-    Parameters:
-    - E: The expression data matrix (2D NumPy array).
-    - sigma2: Initial value for sigma squared. If None, calculated from E.
-    - u: Initial value for u. If None, set to 0.2.
-    - tau2: Initial value for tau squared. If None, calculated based on E.
-    - pbar: Boolean indicating whether to show a progress bar.
-    - iterations: Number of iterations for the progress bar.
-
-    Returns:
-    - sigma2: Initialized sigma squared.
-    - T: Diagonal matrix of variances.
-    - S: Precomputed outer products of columns of E.
-    - W: Array of ones with length equal to the number of genes (Ng).
-    """
-
-    # Initialize parameters for probabilistic model
-    if sigma2 is None:
-        sigma2 = np.mean(np.var(E, axis=0))
-    if u is None:
-        u = 0.2
-    if tau2 is None:
-        tau2 = 4 / (24 + E.shape[0])
-
-    sigma2_0 = sigma2
-    T = np.diag([u**2, tau2, tau2])
-
-    # Precompute some variables used in the EM loop
-    Ng = E.shape[1]
-    S = np.array([np.outer(E[:, l], E[:, l]) for l in range(Ng)])
-    W = np.ones(Ng)
-
-    return sigma2, u, tau2, T, S, W
-
-
-def find_roots(x, A, B, C, D):
-    """
-    Computes the roots of a polynomial based on the input parameters.
-
-    Parameters:
-    - A, B, C, D: Coefficients of the polynomial.
-    - x: A list or array containing the values for x[0] and x[1].
-
-    Returns:
-    - roots: Roots of the polynomial.
-    """
-    zero = (
-        B**2 * C**2
-        + A**2 * D**2
-        - x[0] ** 2 * (D**2 + C**2)
-        - x[1] ** 2 * (A**2 + B**2)
-        + 2 * x[0] * x[1] * (A * B + C * D)
-        - 2 * A * B * C * D
-    )
-    one = 2 * (
-        (A + D) * (A * D - B * C)
-        - x[0] ** 2 * D
-        - x[1] ** 2 * A
-        + x[0] * x[1] * (B + C)
-    )
-    two = A**2 + D**2 + 4 * A * D - x[0] ** 2 - x[1] ** 2 - 2 * B * C
-    three = 2 * (A + D)
-    four = 1
-
-    print("zero", zero)
-    print("one", one)
-    print("two", two)
-    print("three", three)
-    print("four", four)
-
-    # Roots of the polynomial (use numpy roots for equivalent of polyroot)
-    return np.roots([four, three, two, one, zero])
