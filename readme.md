@@ -8,7 +8,7 @@
 - Incorporates an advanced Expectation Maximization algorithm.
 - Inspired by methods from Statistical Physics.
   
-This method was applied in the following Science paper: [Circadian Phases Inference Using RNA-seq](https://www.science.org/doi/10.1126/science.add0846). Further information regarding the alorithm can be found in the supplement.
+This method was applied in the following Science paper: [Sex-dimorphic and age-dependent organization of 24-hour gene expression rhythms in humans](https://www.science.org/doi/10.1126/science.add0846). Further information regarding the alorithm can be found in the supplement.
 
 For the original R version of this package, visit the **CHIRAL** repository [here](https://github.com/naef-lab/CHIRAL/tree/master/Pkg/CHIRAL).
 
