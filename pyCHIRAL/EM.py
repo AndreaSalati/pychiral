@@ -5,6 +5,10 @@ from scipy.linalg import solve
 import pandas as pd
 from scipy.special import iv  # Modified Bessel function of the first kind
 
+# This file contains the functions for the EM algorithm
+# in the loop over iterations, the functions are called in
+# same order as they are defined in this file
+
 
 def EM_Step():
     pass
@@ -50,8 +54,7 @@ def EM_initialization(E, sigma2=None, u=None, tau2=None, iterations=100):
 
 def update_matrices(phi, T, E, sigma2, N):
     """
-    Parameters:
-
+    Update matrices for the EM algorithm.
     """
     # Trigonometric components based on the current phi values
     phi_old = phi.copy()

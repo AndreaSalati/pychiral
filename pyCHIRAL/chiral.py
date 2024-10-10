@@ -1,18 +1,19 @@
 import numpy as np
-from tqdm import tqdm, trange  # Progress bar
+from tqdm import trange  # Progress bar
 from numpy.linalg import inv, det
-from scipy.linalg import solve
 import pandas as pd
-from scipy.special import iv  # Modified Bessel function of the first kind
 
-from helper_fn import (
+from .helper_fn import (
     ccg,
-    J_tilde,
-    Zeta_mf_ordered,
     process_expression_data,
 )
 
-from EM import (
+from .stat_phys import (
+    J_tilde,
+    Zeta_mf_ordered,
+)
+
+from .EM import (
     EM_initialization,
     update_matrices,
     solve_lagrange,
@@ -72,7 +73,7 @@ def CHIRAL(
     if phi_start is None:
         # Use the spin glass initialization (for now, we skip implementation of J.tilde and Zeta.mf.ordered)
         beta = 1000
-        J = J_tilde(E)  # Placeholder function, needs definition
+        J = J_tilde(E)
         Zeta = Zeta_mf_ordered(J, beta, E.shape[0])
         phi = Zeta[:, 1] + np.random.uniform(-0.5, 0.5, size=E.shape[0])
 

@@ -1,12 +1,10 @@
 import numpy as np
-from tqdm import tqdm  # Progress bar
-from numpy.linalg import inv, det
 import pandas as pd
 import matplotlib.pyplot as plt
 
 import scanpy as sc
 
-from chiral import CHIRAL
+from pyCHIRAL.chiral import CHIRAL
 
 path = "/Users/salati/Documents/CODE/github/scCircadianMeta/data/BULK/adata_liver_bulk.h5ad"
 
@@ -18,14 +16,14 @@ organ = "liver"
 
 
 cc = np.median(adata.X.sum(axis=1))
-eps = 1/cc
+eps = 1 / cc
 adata.layers["s_log"] = np.log(adata.X + eps)
 
 adata2 = adata[adata.obs.organ == organ]
 
 res = CHIRAL(adata2, layer="s_log", iterations=500)
 
-true_phase = (adata2.obs.ZT % 24)* 2 * np.pi / 24
+true_phase = (adata2.obs.ZT % 24) * 2 * np.pi / 24
 
 phi = res["phi"]
 
