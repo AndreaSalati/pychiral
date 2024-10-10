@@ -13,7 +13,7 @@ from .stat_phys import (
     Zeta_mf_ordered,
 )
 
-from .EM import (
+from .em import (
     EM_initialization,
     update_matrices,
     solve_lagrange,
