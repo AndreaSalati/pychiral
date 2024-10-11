@@ -71,6 +71,10 @@ def process_expression_data(
     else:
         E = E.layers[layer]
 
+    # Clock gene selection
+    clock_coord = ind2(genes, clockgenes)
+    E = E[:, clock_coord]
+
     # Standardize the matrix if needed
     if standardize:
         E = E / np.std(E, axis=0, keepdims=True)
@@ -78,10 +82,6 @@ def process_expression_data(
     # Mean center the expression data if needed
     if mean_centre_E:
         E = E - E.mean(axis=0, keepdims=True)
-
-    # Clock gene selection
-    clock_coord = ind2(genes, clockgenes)
-    E = E[:, clock_coord]
 
     N, Ng = E.shape
 

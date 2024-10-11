@@ -1,6 +1,6 @@
 import numpy as np
 from tqdm import trange  # Progress bar
-from numpy.linalg import inv, det
+from numpy.linalg import det
 import pandas as pd
 
 from .helper_fn import (
@@ -35,19 +35,19 @@ def CHIRAL(
     sigma2=None,
     TSM=True,
     mean_centre_E=True,
+    standardize=True,
     q=0.1,
     update_q=False,
     phi_start=None,
-    standardize=False,
-    GTEx_names=False,
 ):
     """
-    Infer the circular phase of gene expression §.
+    Infer the circular phase of gene expression
 
     Parameters:
-        E (numpy.ndarray): Matrix of gene expression. Samples should be on columns, genes on rows.
+        E (numpy.ndarray): Matrix of gene expression. Samples should be on columns, genes on rows
+        layer (string): Layer of the data to use, default is None, which useses adata.X
         iterations (int): Number of maximum iterations. Default is 500.
-        clockgenes (list): Set of clock genes (subset of rownames), default is None.
+        clockgenes (list): Set of clock genes (subset of .var_names), default is None, which uses core clock genes.
         tau2 (float): Tau parameter for the prior on gene coefficient, default is None.
         u (float): u parameter for the prior on gene means, default is None.
         sigma2 (float): Standard deviation of data points for prediction, default is None.
@@ -57,7 +57,6 @@ def CHIRAL(
         update_q (bool): Whether to update q during EM, default is False.
         phi_start (numpy.ndarray): Initial guess for phases, default is None.
         standardize (bool): Whether to standardize the matrix for inference, default is False.
-        GTEx_names (bool): Convert row names if analyzing GTEx data, default is False.
 
     Returns:
         dict: Inferred phases, sigma, alpha, weights, iteration number, and other metrics.
@@ -92,20 +91,20 @@ def CHIRAL(
 
         Tot = np.sum(W)  # Total sum of weights
 
-        K, O, A, B, C, D = solve_lagrange(alpha, M_inv, E, sigma2, W, Tot, i)
-        # Ensure no NaN values in O
-        if np.any(np.isnan(O)):
+        K, Om, A, B, C, D = solve_lagrange(alpha, M_inv, E, sigma2, W, Tot, i)
+        # Ensure no NaN values in Om
+        if np.any(np.isnan(Om)):
             return {"alpha": alpha, "weights": W, "iteration": i}
 
-        # Apply find_roots function for each column of O
-        rooted = np.apply_along_axis(find_roots, 0, O, A, B, C, D)
+        # Apply find_roots function for each column of Om
+        rooted = np.apply_along_axis(find_roots, 0, Om, A, B, C, D)
 
         # Test roots to find the minimum (corresponds to the minimum of the Q function)
         ze = []
         # Loop through each sample to find the best root
         for j in range(Nc):
             possible_solutions = evaluate_possible_solutions(
-                rooted, K, O, alpha, E, W, sigma2, M_inv, Tot, phi_old, j, Ng
+                rooted, K, Om, alpha, E, W, sigma2, M_inv, Tot, phi_old, j, Ng
             )
 
             # Find the solution that minimizes the Q function

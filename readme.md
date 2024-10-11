@@ -17,4 +17,11 @@ For the original R version of this package, visit the **CHIRAL** repository [her
 To run pyCHIRAL, you need to install the following dependencies:
 
 ```bash
-pip install tqdm numpy pandas scipy
+conda install tqdm numpy pandas scipy anndata scanpy
+```
+
+## Usage
+pyCHIRAL is compatible with anndata, and it receives data in the format Nsamples x Ngenes (unlike the Bulk conventions).
+A layer of the dataset needs to be specified by argument. 
+The layer passed to CHIRAL needs to be **log-tranformed**. By default the data will also be mean centered and standardized.
+
