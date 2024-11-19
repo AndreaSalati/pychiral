@@ -88,6 +88,22 @@ def process_expression_data(
     return E, E_full, clock_coord, N, Ng
 
 
+def circular_deviation(x, y, period=2 * np.pi):
+    """
+    It computes the circular absolute deviation between two vectors x and y
+    Inputs:
+    x: phase array
+    y: phase array
+    period: period of the circular variable
+    """
+
+    x, y = x % period, y % period
+    v1 = np.abs(x - y)
+    v2 = (period - v1) % period
+
+    return np.minimum(v1, v2)
+
+
 def optimal_shift(p, p0, n_s=200, return_mad=True):
     """
     Aligns two sequences defined on the unit circle, taking care of the periodicity
@@ -99,8 +115,11 @@ def optimal_shift(p, p0, n_s=200, return_mad=True):
     # creating a matrix of all possible shifts
     theta_cs = (p.reshape(Nc, 1) - shifts.reshape(1, n_s)) % (2 * np.pi)
     theta_cs_neg = (-p.reshape(Nc, 1) - shifts.reshape(1, n_s)) % (2 * np.pi)
-    delta_cs = np.abs(theta_cs - p0.reshape(Nc, 1)) % (2 * np.pi)
-    delta_cs_neg = np.abs(theta_cs_neg - p0.reshape(Nc, 1)) % (2 * np.pi)
+
+    # for each shift, computing the circular deviation, using apply_along_axis
+    delta_cs = circular_deviation(p0[:, None], theta_cs)
+    delta_cs_neg = circular_deviation(p0[:, None], theta_cs_neg)
+
     # computing the median absolute deviation for all shifts
     v = np.median(delta_cs, axis=0)
     v_neg = np.median(delta_cs_neg, axis=0)
@@ -108,10 +127,14 @@ def optimal_shift(p, p0, n_s=200, return_mad=True):
     best_shift_ind = np.argmin(v)
     best_shift_ind_neg = np.argmin(v_neg)
     mad, mad_neg = v[best_shift_ind], v_neg[best_shift_ind_neg]
+
     # selecting which direction is the best
-    best_ind = best_shift_ind if mad < mad_neg else best_shift_ind_neg
+    if mad < mad_neg:
+        phi_aligned = theta_cs[:, best_shift_ind]
+    else:
+        phi_aligned = theta_cs_neg[:, best_shift_ind_neg]
 
     if return_mad:
-        return theta_cs[:, best_ind], mad  # , shifts[best_ind]
+        return phi_aligned, mad
     else:
-        return theta_cs[:, best_ind]
+        return phi_aligned

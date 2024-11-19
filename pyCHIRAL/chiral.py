@@ -44,7 +44,9 @@ def CHIRAL(
     Infer the circular phase of gene expression
 
     Parameters:
-        E (numpy.ndarray): Matrix of gene expression. Samples should be on columns, genes on rows
+        E (adata object): Matrix of gene expression.
+            Samples should be on columns, genes on rows
+            The layer used must NOT be a sparse matrix.
         layer (string): Layer of the data to use, default is None, which useses adata.X
         iterations (int): Number of maximum iterations. Default is 500.
         clockgenes (list): Set of clock genes (subset of .var_names), default is None, which uses core clock genes.
