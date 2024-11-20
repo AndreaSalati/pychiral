@@ -18,7 +18,7 @@ from .em import (
     update_matrices,
     solve_lagrange,
     find_roots,
-    evaluate_possible_solutions_vectorized,
+    evaluate_possible_solutions_fully_vectorized,
     update_Q_hist,
     update_EM_parameters,
     update_weights,
@@ -99,22 +99,27 @@ def CHIRAL(
         rooted = np.apply_along_axis(find_roots, 0, Om, A, B, C, D)
 
         # Test roots to find the minimum (corresponds to the minimum of the Q function)
-        ze = []
-        # Loop through each sample to find the best root
-        for j in range(Nc):
-            possible_solutions = evaluate_possible_solutions_vectorized(
-                rooted, K, Om, alpha, E, W, sigma2, M_inv, Tot, phi_old, j, Ng
-            )
+        # Vectorized version of the function
+        possible_solutions = evaluate_possible_solutions_fully_vectorized(
+            rooted, K, Om, alpha, E, W, sigma2, M_inv, Tot, phi_old, Ng
+        )
+        # Extract Q values (the third column)
+        Q_values = possible_solutions[:, :, 2]  # Shape: [Nroots, Nc]
 
-            # Find the solution that minimizes the Q function
-            solutions = np.vstack(possible_solutions)
-            # choosing min of Q function
-            min_index = np.argmin(solutions[:, 2])
-            if solutions[min_index, 2] == 1e5:
-                raise ValueError(f"No solution found on the circle at iteration {i}")
+        # Find the indices of the minimum Q value for each observation
+        min_indices = np.argmin(Q_values, axis=0)  # Shape: [Nc]
 
-            ze.append(solutions[min_index, :])
+        # Extract the minimum Q values
+        min_Q_values = Q_values[
+            min_indices, np.arange(Q_values.shape[1])
+        ]  # Shape: [Nc]
 
+        # Check for invalid solutions
+        if np.any(min_Q_values == 1e5):
+            raise ValueError("No solution found on the circle for some observations")
+
+        # Extract the corresponding solutions # Shape: [Nc, 4]
+        ze = possible_solutions[min_indices, np.arange(Q_values.shape[1]), :]
         # Update phi using the best root solutions
         ze = np.array(ze).T
         phi = np.arctan2(ze[1, :], ze[0, :]) % (2 * np.pi)

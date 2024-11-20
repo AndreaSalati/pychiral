@@ -215,78 +215,93 @@ def evaluate_possible_solutions(
     return possible_solutions
 
 
-def evaluate_possible_solutions_vectorized(
-    rooted, K, O, alpha, E, W, sigma2, M_inv, Tot, phi_old, j, Ng
+def evaluate_possible_solutions_fully_vectorized(
+    rooted, K, O, alpha, E, W, sigma2, M_inv, Tot, phi_old, Ng
 ):
     """
-    Vectorized version of the function to evaluate possible solutions for the roots of the polynomial.
+    Fully vectorized version of the function to evaluate possible solutions for the roots of the polynomial.
+    Processes all Nc observations at once.
     """
-    y = rooted[:, j]
+    Nroots, Nc = rooted.shape
 
-    # Create a mask for roots with negligible imaginary parts
-    mask = np.abs(np.imag(y)) <= 1e-8
+    # Extract real roots and create a mask for valid roots
+    y = rooted
+    mask = np.abs(np.imag(y)) <= 1e-8  # Shape: [Nroots, Nc]
 
     # Initialize possible_solutions with default values
-    Nroots = y.shape[0]
-    possible_solutions = np.zeros((Nroots, 4))
-    possible_solutions[:, :2] = 0
-    possible_solutions[:, 2:] = 100000
+    possible_solutions = np.zeros((Nroots, Nc, 4))
+    possible_solutions[:, :, :2] = 0
+    possible_solutions[:, :, 2:] = 100000  # Default Q values
 
-    # Process roots with negligible imaginary parts
-    real_y = y[mask].real  # Shape: (Nroots_real,)
+    # Process valid roots
+    valid_indices = np.where(mask)
+    if valid_indices[0].size == 0:
+        # No valid roots found
+        return possible_solutions
 
-    # Compute K_lambda = K + y * I
-    K_lambda = (
-        K + np.eye(2)[None, :, :] * real_y[:, None, None]
-    )  # Shape: (Nroots_real, 2, 2)
+    # Extract valid real parts of roots
+    real_y_valid = y.real[valid_indices]  # Shape: [N_valid]
 
-    # Solve K_lambda * zet = O[:, j]
-    O_j = O[:, j]  # Shape: (2,)
-    O_j_tiled = np.tile(O_j, (real_y.shape[0], 1))  # Shape: (Nroots_real, 2)
-    zet = np.linalg.solve(K_lambda, O_j_tiled)  # Shape: (Nroots_real, 2)
+    # Compute K_lambda for valid roots
+    K_lambda = K + np.einsum(
+        "n,ij->nij", real_y_valid, np.eye(2)
+    )  # Shape: [N_valid, 2, 2]
+
+    # Extract corresponding O_j for valid indices
+    O_j = O[:, valid_indices[1]].T  # Shape: [N_valid, 2]
+
+    # Solve K_lambda * zet = O_j
+    zet = np.linalg.solve(K_lambda, O_j)  # Shape: [N_valid, 2]
 
     # Compute phit from zet
-    phit = np.arctan2(zet[:, 1], zet[:, 0]) % (2 * np.pi)  # Shape: (Nroots_real,)
+    phit = np.arctan2(zet[:, 1], zet[:, 0]) % (2 * np.pi)  # Shape: [N_valid]
 
-    # Compute Xt and Mt
+    # Compute Xt and Mt for valid roots
     Xt = np.column_stack(
-        (np.ones(real_y.shape[0]), np.cos(phit), np.sin(phit))
-    )  # Shape: (Nroots_real, 3)
-    Mt = np.einsum("ni,nj->nij", Xt, Xt)  # Shape: (Nroots_real, 3, 3)
+        (np.ones_like(phit), np.cos(phit), np.sin(phit))
+    )  # Shape: [N_valid, 3]
+    Mt = Xt[:, :, None] * Xt[:, None, :]  # Shape: [N_valid, 3, 3]
 
-    # Compute Xt_old and Mt_old
-    phi_old_j = phi_old[j]
-    Xt_old = np.array([1, np.cos(phi_old_j), np.sin(phi_old_j)])  # Shape: (3,)
-    Mt_old = np.outer(Xt_old, Xt_old)  # Shape: (3, 3)
+    # Compute Xt_old and Mt_old based on phi_old
+    phi_old_j = phi_old[valid_indices[1]]  # Shape: [N_valid]
+    Xt_old = np.column_stack(
+        (np.ones_like(phi_old_j), np.cos(phi_old_j), np.sin(phi_old_j))
+    )  # Shape: [N_valid, 3]
+    Mt_old = Xt_old[:, :, None] * Xt_old[:, None, :]  # Shape: [N_valid, 3, 3]
 
-    # Prepare alpha and E for vectorized computations
-    alpha = np.array(alpha)  # Shape: (Ng, 3)
-    E_j = E[j, :]  # Shape: (Ng,)
+    # Prepare alpha and E_j for vectorized computations
+    alpha = np.array(alpha)  # Shape: [Ng, 3]
+    E_j = E[valid_indices[1], :]  # Shape: [N_valid, Ng]
 
-    # Compute Qs for new values
-    Qs_term1 = np.einsum("ki,nij,kj->nk", alpha, Mt, alpha)  # Shape: (Nroots_real, Ng)
-    Term2 = -2 * np.dot(Xt, alpha.T) * E_j[None, :]  # Shape: (Nroots_real, Ng)
-    Term3 = sigma2 * np.einsum("ij,nji->n", M_inv, Mt)  # Shape: (Nroots_real,)
-    Qs = Qs_term1 + Term2 + Term3[:, None]  # Shape: (Nroots_real, Ng)
+    # Compute Qs for the new values
+    Qs_term1 = np.einsum("ki,nij,kj->nk", alpha, Mt, alpha)  # Shape: [N_valid, Ng]
+    temp = np.dot(Xt, alpha.T)  # Shape: [N_valid, Ng]
+    Term2 = -2 * temp * E_j  # Shape: [N_valid, Ng]
+    Term3 = sigma2 * np.einsum("ij,nji->n", M_inv, Mt)  # Shape: [N_valid]
+    Qs = Qs_term1 + Term2 + Term3[:, None]  # Shape: [N_valid, Ng]
 
-    # Compute Qs_old
-    Term1_old = np.einsum("ki,ij,kj->k", alpha, Mt_old, alpha)  # Shape: (Ng,)
-    Term2_old = -2 * np.dot(alpha, Xt_old) * E_j  # Shape: (Ng,)
-    Term3_old = sigma2 * np.trace(M_inv @ Mt_old)  # Scalar
-    Qs_old = Term1_old + Term2_old + Term3_old  # Shape: (Ng,)
+    # Compute Qs for the old values
+    Qs_term1_old = np.einsum(
+        "ki,nij,kj->nk", alpha, Mt_old, alpha
+    )  # Shape: [N_valid, Ng]
+    temp_old = np.dot(Xt_old, alpha.T)  # Shape: [N_valid, Ng]
+    Term2_old = -2 * temp_old * E_j  # Shape: [N_valid, Ng]
+    Term3_old = sigma2 * np.einsum("ij,nji->n", M_inv, Mt_old)  # Shape: [N_valid]
+    Qs_old = Qs_term1_old + Term2_old + Term3_old[:, None]  # Shape: [N_valid, Ng]
 
     # Compute the Q function for new and old values
-    W_sigma2 = W / sigma2  # Shape: (Ng,)
-    Q = np.sum(Qs * W_sigma2[None, :], axis=1) / Tot  # Shape: (Nroots_real,)
-    Q_old = np.sum(Qs_old * W_sigma2) / Tot  # Scalar
+    W_sigma2 = W / sigma2  # Shape: [Ng]
+    Q = np.sum(Qs * W_sigma2[None, :], axis=1) / Tot  # Shape: [N_valid]
+    Q_old = np.sum(Qs_old * W_sigma2[None, :], axis=1) / Tot  # Shape: [N_valid]
 
-    # Stack zet, Q, and Q_old
-    solutions = np.hstack(
-        (zet, Q[:, None], np.full((real_y.shape[0], 1), Q_old))
-    )  # Shape: (Nroots_real, 4)
-
-    # Update possible_solutions with computed solutions
-    possible_solutions[mask, :] = solutions
+    # Store the solutions in possible_solutions
+    possible_solutions[valid_indices[0], valid_indices[1], 0:2] = (
+        zet  # zet: [N_valid, 2]
+    )
+    possible_solutions[valid_indices[0], valid_indices[1], 2] = Q  # Q: [N_valid]
+    possible_solutions[valid_indices[0], valid_indices[1], 3] = (
+        Q_old  # Q_old: [N_valid]
+    )
 
     return possible_solutions
 
