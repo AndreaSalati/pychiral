@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import iv  # Modified Bessel function of the first kind
+from tqdm import tqdm
 
 
 def J_tilde(E, n_genes=0, n_samples=0):
@@ -26,10 +27,8 @@ def J_tilde(E, n_genes=0, n_samples=0):
     # Initialize the interaction matrix with zeros
     Jtilde = np.zeros((n_samples, n_samples))
 
-    # Calculate the interaction matrix
-    for i in range(n_samples):
-        for j in range(n_samples):
-            Jtilde[i, j] = np.sum(E[i, :] * E[j, :]) / (n_samples * n_genes)
+    # Calculate the interaction matrix, vecotrized
+    Jtilde = E @ E.T / (n_samples * n_genes)
 
     # Set the diagonal elements to zero
     np.fill_diagonal(Jtilde, 0)
@@ -53,18 +52,22 @@ def Zeta_mf_ordered(J, beta, n_samples, A_0=0.1, iterations=1000):
     """
     A = np.full(n_samples, A_0)
     Theta = np.random.uniform(0, 2 * np.pi, n_samples)
-    # Theta = np.linspace(0, 2 * np.pi, n_samples)
 
-    for _ in range(iterations):
+    # use trange
+    for _ in tqdm(range(iterations), desc="Finding an initial guess for phases..."):
         A_cos = A * np.cos(Theta)
         A_sin = A * np.sin(Theta)
 
-        for k in range(n_samples):
-            u = beta * np.sum(A_cos * J[:, k])
-            v = beta * np.sum(A_sin * J[:, k])
-            mod = np.sqrt(u**2 + v**2)
-            Zeta_k = [u / mod, v / mod] if mod > 0 else [1, 0]
-            Theta[k] = np.arctan2(Zeta_k[1], Zeta_k[0])
-            A[k] = iv(1, mod) / iv(0, mod) if mod <= 20 else 1
+        u = beta * (J @ A_cos)
+        v = beta * (J @ A_sin)
+        mod = np.sqrt(u**2 + v**2)
+
+        # Avoid division by zero
+        Zeta = np.vstack([u / mod, v / mod]).T
+        Zeta[mod == 0] = [1, 0]  # Handle case where mod == 0
+
+        # Update amplitudes and phases
+        Theta = np.arctan2(Zeta[:, 1], Zeta[:, 0])
+        A = np.where(mod <= 20, iv(1, mod) / iv(0, mod), 1)
 
     return np.column_stack([A, Theta % (2 * np.pi)])

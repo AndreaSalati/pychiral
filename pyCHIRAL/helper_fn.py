@@ -40,7 +40,11 @@ def ind2(large_list, small_list, verbose=False):
 
 
 def process_expression_data(
-    E, clockgenes=None, ccg=None, layer=None, standardize=False, mean_centre_E=False
+    E,
+    clockgenes=None,
+    ccg=None,
+    layer=None,
+    standardize=True,
 ):
     """
     Processes the expression data based on the provided parameters.
@@ -77,11 +81,7 @@ def process_expression_data(
 
     # Standardize the matrix if needed
     if standardize:
-        E = E / np.std(E, axis=0, keepdims=True)
-
-    # Mean center the expression data if needed
-    if mean_centre_E:
-        E = E - E.mean(axis=0, keepdims=True)
+        E = (E - E.mean(axis=0, keepdims=True)) / np.std(E, axis=0, keepdims=True)
 
     N, Ng = E.shape
 

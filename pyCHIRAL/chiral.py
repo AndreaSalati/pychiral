@@ -19,6 +19,7 @@ from .em import (
     solve_lagrange,
     find_roots,
     evaluate_possible_solutions,
+    evaluate_possible_solutions_vectorized,
     update_Q_hist,
     update_EM_parameters,
     update_weights,
@@ -27,14 +28,13 @@ from .em import (
 
 def CHIRAL(
     E,
+    clockgenes,
     layer=None,
     iterations=500,
-    clockgenes=None,
     tau2=None,
     u=None,
     sigma2=None,
     TSM=True,
-    mean_centre_E=True,
     standardize=True,
     q=0.1,
     update_q=False,
@@ -44,28 +44,26 @@ def CHIRAL(
     Infer the circular phase of gene expression
 
     Parameters:
-        E (adata object): Matrix of gene expression.
-            Samples should be on columns, genes on rows
-            The layer used must NOT be a sparse matrix.
-        layer (string): Layer of the data to use, default is None, which useses adata.X
-        iterations (int): Number of maximum iterations. Default is 500.
-        clockgenes (list): Set of clock genes (subset of .var_names), default is None, which uses core clock genes.
-        tau2 (float): Tau parameter for the prior on gene coefficient, default is None.
-        u (float): u parameter for the prior on gene means, default is None.
-        sigma2 (float): Standard deviation of data points for prediction, default is None.
-        TSM (bool): Switches two-state model in EM, default is True.
-        mean_centre_E (bool): Whether to center data around the empirical mean, default is True.
-        q (float): Probability weight for EM procedure.
-        update_q (bool): Whether to update q during EM, default is False.
-        phi_start (numpy.ndarray): Initial guess for phases, default is None.
-        standardize (bool): Whether to standardize the matrix for inference, default is False.
+        - E (numpy.ndarray): Matrix of gene expression. Samples should be on columns, genes on rows
+        - clockgenes (list): Set of clock genes (subset of .var_names), default is None, which uses core clock genes.
+        - layer (string): Layer of the data to use, default is None, which useses adata.X
+        - iterations (int): Number of maximum iterations. Default is 500.
+        - tau2 (float): Tau parameter for the prior on gene coefficient, default is None.
+        - u (float): u parameter for the prior on gene means, default is None.
+        - sigma2 (float): Standard deviation of data points for prediction, default is None.
+        - TSM (bool): Switches two-state model in EM, default is True.
+        - mean_centre_E (bool): Whether to center data around the empirical mean, default is True.
+        - q (float): Probability weight for EM procedure.
+        - update_q (bool): Whether to update q during EM, default is False.
+        - phi_start (numpy.ndarray): Initial guess for phases, default is None.
+        - standardize (bool): Whether to standardize the matrix for inference, default is False.
 
     Returns:
         dict: Inferred phases, sigma, alpha, weights, iteration number, and other metrics.
     """
 
     E, E_full, clock_coord, Nc, Ng = process_expression_data(
-        E, clockgenes, ccg, layer, standardize, mean_centre_E
+        E, clockgenes, ccg, layer, standardize
     )
 
     phi = phi_start
@@ -105,7 +103,7 @@ def CHIRAL(
         ze = []
         # Loop through each sample to find the best root
         for j in range(Nc):
-            possible_solutions = evaluate_possible_solutions(
+            possible_solutions = evaluate_possible_solutions_vectorized(
                 rooted, K, Om, alpha, E, W, sigma2, M_inv, Tot, phi_old, j, Ng
             )
 
