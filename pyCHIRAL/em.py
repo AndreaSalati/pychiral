@@ -153,69 +153,6 @@ def find_roots(x, A, B, C, D):
 
 
 def evaluate_possible_solutions(
-    rooted, K, O, alpha, E, W, sigma2, M_inv, Tot, phi_old, j, Ng
-):
-    """
-    This function evaluates the possible solutions for the roots of the polynomial.
-    And eval Q(sol)
-    """
-    possible_solutions = []
-
-    for y in rooted[:, j]:
-        # Ignore complex roots
-        if np.abs(np.imag(y)) > 1e-8:
-            possible_solutions.append(np.array([0, 0, 100000, 100000]))
-            continue
-
-        # Take the real part of the root
-        y = np.real(y)
-
-        # Compute K - lambda*I
-        K_lambda = K + np.eye(2) * y
-
-        # Solve the system of equations: K_lambda * zet = O[:, j]
-        zet = solve(K_lambda, O[:, j])
-
-        # Compute new phi from zet
-        phit = np.arctan2(zet[1], zet[0]) % (2 * np.pi)
-
-        # Compute new Xt and Mt
-        Xt = np.array([1, np.cos(phit), np.sin(phit)])
-        Mt = np.outer(Xt, Xt)
-
-        # Compute old Xt and Mt_old based on phi_old
-        Xt_old = np.array([1, np.cos(phi_old[j]), np.sin(phi_old[j])])
-        Mt_old = np.outer(Xt_old, Xt_old)
-
-        # Compute Qs for the new and old values
-        Qs = np.array(
-            [
-                alpha[k] @ Mt @ alpha[k]
-                - 2 * alpha[k] @ Xt * E[j, k]
-                + sigma2 * np.sum(np.diag(M_inv @ Mt))
-                for k in range(Ng)
-            ]
-        )
-        Qs_old = np.array(
-            [
-                alpha[k] @ Mt_old @ alpha[k]
-                - 2 * alpha[k] @ Xt_old * E[j, k]
-                + sigma2 * np.sum(np.diag(M_inv @ Mt_old))
-                for k in range(Ng)
-            ]
-        )
-
-        # Compute the Q function for new and old values
-        Q = np.sum(Qs * W / sigma2) / Tot
-        Q_old = np.sum(Qs_old * W / sigma2) / Tot
-
-        # Append the solution
-        possible_solutions.append(np.hstack((zet, Q, Q_old)))
-
-    return possible_solutions
-
-
-def evaluate_possible_solutions_fully_vectorized(
     rooted, K, O, alpha, E, W, sigma2, M_inv, Tot, phi_old, Ng
 ):
     """
@@ -322,15 +259,22 @@ def update_Q_hist(Q_hist, ze, i, Nc):
 
 def update_weights(E, X, M_inv, sigma2, dTinv, M, q):
     Nc, Ng = E.shape
-    P1_0 = np.array(
-        [
-            np.exp(E[:, p] @ X @ M_inv @ X.T @ E[:, p].T / (2 * sigma2))
-            * np.sqrt(dTinv * sigma2**3 / np.linalg.det(M))
-            for p in range(Ng)
-        ]
-    )
+
+    # Compute the quadratic terms for all p at once
+    E_M = E.T @ X @ M_inv @ X.T @ E  # Shape: (Ng, Ng)
+
+    # Diagonal elements represent E[:, p] @ ... @ E[:, p].T for all p
+    quad_terms = np.diag(E_M) / (2 * sigma2)  # Shape: (Ng,)
+
+    # Compute P1_0 for all p
+    P1_0 = np.exp(quad_terms) * np.sqrt(dTinv * sigma2**3 / np.linalg.det(M))
+
+    # Compute W for all p
     W = q * P1_0 / (1 - q + q * P1_0)
-    W[np.isnan(W)] = 1  # Replace NaN with 1
+
+    # Handle NaNs
+    W[np.isnan(W)] = 1
+
     return W
 
 
@@ -346,13 +290,13 @@ def update_EM_parameters(phi, Nn, X, X_old, S, E, T, sigma2, W, q, update_q):
         (np.ones(len(phi)), cos_phi, sin_phi)
     )  # Equivalent of cbind(1, cos(phi), sin(phi))
 
-    Mold = Nn + sigma2 * inv(T)
-    Moldinv = inv(Mold)  # Inverse of Mold
+    M_old = Nn + sigma2 * inv(T)
+    M_old_inv = inv(M_old)  # Inverse of M_old
 
     # Update sigma2.m1
     sigma2_m1 = np.array(
         [
-            np.sum(np.diag(S[s] - S[s] @ X_old @ Moldinv @ X.T)) / Nc + 0.01
+            np.sum(np.diag(S[s] - S[s] @ X_old @ M_old_inv @ X.T)) / Nc + 0.01
             for s in range(Ng)
         ]
     )
@@ -365,4 +309,4 @@ def update_EM_parameters(phi, Nn, X, X_old, S, E, T, sigma2, W, q, update_q):
         q = np.mean(W)
         q = max(0.05, min(q, 0.3))
 
-    return cos_phi, sin_phi, X, Mold, Moldinv, sigma2_m1, sigma2_m0, sigma2, q
+    return cos_phi, sin_phi, X, M_old, M_old_inv, sigma2_m1, sigma2_m0, sigma2, q

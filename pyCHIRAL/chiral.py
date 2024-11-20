@@ -18,7 +18,7 @@ from .em import (
     update_matrices,
     solve_lagrange,
     find_roots,
-    evaluate_possible_solutions_fully_vectorized,
+    evaluate_possible_solutions,
     update_Q_hist,
     update_EM_parameters,
     update_weights,
@@ -100,7 +100,7 @@ def CHIRAL(
 
         # Test roots to find the minimum (corresponds to the minimum of the Q function)
         # Vectorized version of the function
-        possible_solutions = evaluate_possible_solutions_fully_vectorized(
+        possible_solutions = evaluate_possible_solutions(
             rooted, K, Om, alpha, E, W, sigma2, M_inv, Tot, phi_old, Ng
         )
         # Extract Q values (the third column)
