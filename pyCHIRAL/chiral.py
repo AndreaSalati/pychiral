@@ -18,7 +18,6 @@ from .em import (
     update_matrices,
     solve_lagrange,
     find_roots,
-    evaluate_possible_solutions,
     evaluate_possible_solutions_vectorized,
     update_Q_hist,
     update_EM_parameters,
