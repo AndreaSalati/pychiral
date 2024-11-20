@@ -54,7 +54,8 @@ def Zeta_mf_ordered(J, beta, n_samples, A_0=0.1, iterations=1000):
     Theta = np.random.uniform(0, 2 * np.pi, n_samples)
 
     # use trange
-    for _ in tqdm(range(iterations), desc="Finding an initial guess for phases..."):
+    # for _ in tqdm(range(iterations), desc="Finding an initial guess for phases..."):
+    for _ in range(iterations):
         A_cos = A * np.cos(Theta)
         A_sin = A * np.sin(Theta)
 
