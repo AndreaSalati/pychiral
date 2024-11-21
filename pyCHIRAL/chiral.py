@@ -10,7 +10,7 @@ from .helper_fn import (
 
 from .stat_phys import (
     J_tilde,
-    Zeta_mf_ordered,
+    phase_initialization_mf,
 )
 
 from .em import (
@@ -29,7 +29,8 @@ def CHIRAL(
     E,
     clockgenes,
     layer=None,
-    iterations=500,
+    iter_em=500,
+    iter_mf=1000,
     tau2=None,
     u=None,
     sigma2=None,
@@ -46,7 +47,8 @@ def CHIRAL(
         - E (numpy.ndarray): Matrix of gene expression. Samples should be on columns, genes on rows
         - clockgenes (list): Set of clock genes (subset of .var_names), default is None, which uses core clock genes.
         - layer (string): Layer of the data to use, default is None, which useses adata.X
-        - iterations (int): Number of maximum iterations. Default is 500.
+        - iter_mf (int): Number of iterations for the mean field approximation, default is 1000.
+        - iter_em (int): Number of maximum iterations. Default is 500.
         - tau2 (float): Tau parameter for the prior on gene coefficient, default is None.
         - u (float): u parameter for the prior on gene means, default is None.
         - sigma2 (float): Standard deviation of data points for prediction, default is None.
@@ -72,17 +74,15 @@ def CHIRAL(
         # Use the spin glass initialization (for now, we skip implementation of J.tilde and Zeta.mf.ordered)
         beta = 1000
         J = J_tilde(E)
-        Zeta = Zeta_mf_ordered(J, beta, E.shape[0])
+        Zeta = phase_initialization_mf(J, beta, E.shape[0], iter_mf=iter_mf)
         phi = Zeta[:, 1] + np.random.uniform(-0.5, 0.5, size=E.shape[0])
 
-    sigma2, u, tau2, T, S, W = EM_initialization(E, sigma2, u, tau2, iterations)
+    sigma2, u, tau2, T, S, W = EM_initialization(E, sigma2, u, tau2)
     dTinv = 1 / det(T)
 
     # Start EM iterations
-    for i in trange(iterations, desc="Progress", bar_format="{percentage:3.0f}%"):
-        phi_old, alpha, M, M_inv, Nn, Nn_inv, X, X_old = update_matrices(
-            phi, T, E, sigma2, Nc
-        )
+    for i in trange(iter_em, desc="Progress", bar_format="{percentage:3.0f}%"):
+        phi_old, alpha, M, M_inv, Nn, X, X_old = update_matrices(phi, T, E, sigma2, Nc)
 
         # If two-state model is off, reset weights to initial values
         if not TSM:
@@ -159,7 +159,7 @@ def CHIRAL(
         "sigma": sigma2,
         "alpha": alpha,
         "weights": W,
-        "iteration": iterations,
+        "iteration": iter_em,
         "sigma.m1": sigma2_m1,
         "genes": clockgenes,
         "E": E_full,

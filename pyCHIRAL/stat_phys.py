@@ -36,7 +36,7 @@ def J_tilde(E, n_genes=0, n_samples=0):
     return Jtilde
 
 
-def Zeta_mf_ordered(J, beta, n_samples, A_0=0.1, iterations=1000):
+def phase_initialization_mf(J, beta, n_samples, A_0=0.1, iter_mf=1000):
     """
     Spin glass approximation to initialize the EM model.
 
@@ -55,7 +55,7 @@ def Zeta_mf_ordered(J, beta, n_samples, A_0=0.1, iterations=1000):
 
     # use trange
     # for _ in tqdm(range(iterations), desc="Finding an initial guess for phases..."):
-    for _ in range(iterations):
+    for _ in range(iter_mf):
         A_cos = A * np.cos(Theta)
         A_sin = A * np.sin(Theta)
 

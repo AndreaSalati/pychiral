@@ -14,7 +14,7 @@ def EM_Step():
     pass
 
 
-def EM_initialization(E, sigma2=None, u=None, tau2=None, iterations=100):
+def EM_initialization(E, sigma2=None, u=None, tau2=None):
     """
     Initializes parameters for a probabilistic model.
 
@@ -41,12 +41,11 @@ def EM_initialization(E, sigma2=None, u=None, tau2=None, iterations=100):
     if tau2 is None:
         tau2 = 4 / (24 + E.shape[0])
 
-    sigma2_0 = sigma2
     T = np.diag([u**2, tau2, tau2])
 
     # Precompute some variables used in the EM loop
     Ng = E.shape[1]
-    S = np.array([np.outer(E[:, l], E[:, l]) for l in range(Ng)])
+    S = np.einsum("il, jl -> lij", E, E)
     W = np.ones(Ng)
 
     return sigma2, u, tau2, T, S, W
@@ -77,7 +76,7 @@ def update_matrices(phi, T, E, sigma2, N):
     alpha = M_inv @ X.T @ E
     alpha = alpha.T  # Transpose back to match R's convention
 
-    return phi_old, alpha, M, M_inv, Nn, Nn_inv, X, X_old
+    return phi_old, alpha, M, M_inv, Nn, X, X_old
 
 
 def solve_lagrange(alpha, M_inv, E, sigma2, W, Tot, i):
@@ -294,12 +293,8 @@ def update_EM_parameters(phi, Nn, X, X_old, S, E, T, sigma2, W, q, update_q):
     M_old_inv = inv(M_old)  # Inverse of M_old
 
     # Update sigma2.m1
-    sigma2_m1 = np.array(
-        [
-            np.sum(np.diag(S[s] - S[s] @ X_old @ M_old_inv @ X.T)) / Nc + 0.01
-            for s in range(Ng)
-        ]
-    )
+    sigma2_m1 = np.trace(S - S @ X_old @ M_old_inv @ X.T, axis1=1, axis2=2) / Nc + 0.01
+
     sigma2_m0 = np.var(E, axis=0)
     sigma2 = np.mean(sigma2_m1 * W + sigma2_m0 * (1 - W))
     sigma2_m1 = np.sum(sigma2_m1 * W) / np.sum(W)
