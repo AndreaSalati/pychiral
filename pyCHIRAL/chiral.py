@@ -15,13 +15,8 @@ from .stat_phys import (
 
 from .em import (
     EM_initialization,
-    update_matrices,
-    solve_lagrange,
-    find_roots,
-    evaluate_possible_solutions,
-    update_Q_hist,
+    EM_step,
     update_EM_parameters,
-    update_weights,
 )
 
 
@@ -63,9 +58,7 @@ def CHIRAL(
         dict: Inferred phases, sigma, alpha, weights, iteration number, and other metrics.
     """
 
-    E, E_full, clock_coord, Nc, Ng = process_expression_data(
-        E, clockgenes, ccg, layer, standardize
-    )
+    E, E_full, Nc, Ng = process_expression_data(E, clockgenes, ccg, layer, standardize)
 
     phi = phi_start
 
@@ -75,63 +68,17 @@ def CHIRAL(
         beta = 1000
         J = J_tilde(E)
         Zeta = phase_initialization_mf(J, beta, E.shape[0], iter_mf=iter_mf)
-        phi = Zeta[:, 1] + np.random.uniform(-0.5, 0.5, size=E.shape[0])
+        phi = Zeta[:, 1] + np.random.uniform(-0.5, 0.5, size=Nc)
 
     sigma2, u, tau2, T, S, W = EM_initialization(E, sigma2, u, tau2)
     dTinv = 1 / det(T)
+    Q_hist = pd.DataFrame(columns=["cos", "sin", "Q", "Q_old", "iteration", "sample"])
 
     # Start EM iterations
     for i in trange(iter_em, desc="Progress", bar_format="{percentage:3.0f}%"):
-        phi_old, alpha, M, M_inv, Nn, X, X_old = update_matrices(phi, T, E, sigma2, Nc)
-
-        # If two-state model is off, reset weights to initial values
-        if not TSM:
-            W = np.ones(Ng)
-
-        Tot = np.sum(W)  # Total sum of weights
-
-        K, Om, A, B, C, D = solve_lagrange(alpha, M_inv, E, sigma2, W, Tot, i)
-        # Ensure no NaN values in Om
-        if np.any(np.isnan(Om)):
-            return {"alpha": alpha, "weights": W, "iteration": i}
-
-        # Apply find_roots function for each column of Om
-        rooted = np.apply_along_axis(find_roots, 0, Om, A, B, C, D)
-
-        # Test roots to find the minimum (corresponds to the minimum of the Q function)
-        # Vectorized version of the function
-        possible_solutions = evaluate_possible_solutions(
-            rooted, K, Om, alpha, E, W, sigma2, M_inv, Tot, phi_old, Ng
+        phi, phi_old, Q_hist, W, alpha, Nn, X, X_old = EM_step(
+            phi, T, E, sigma2, Nc, Ng, i, TSM, dTinv, q, W, Q_hist
         )
-        # Extract Q values (the third column)
-        Q_values = possible_solutions[:, :, 2]  # Shape: [Nroots, Nc]
-
-        # Find the indices of the minimum Q value for each observation
-        min_indices = np.argmin(Q_values, axis=0)  # Shape: [Nc]
-
-        # Extract the minimum Q values
-        min_Q_values = Q_values[
-            min_indices, np.arange(Q_values.shape[1])
-        ]  # Shape: [Nc]
-
-        # Check for invalid solutions
-        if np.any(min_Q_values == 1e5):
-            raise ValueError("No solution found on the circle for some observations")
-
-        # Extract the corresponding solutions # Shape: [Nc, 4]
-        ze = possible_solutions[min_indices, np.arange(Q_values.shape[1]), :]
-        # Update phi using the best root solutions
-        ze = np.array(ze).T
-        phi = np.arctan2(ze[1, :], ze[0, :]) % (2 * np.pi)
-
-        # Update weights
-        if i == 0:
-            Q_hist = pd.DataFrame(
-                columns=["cos", "sin", "Q", "Q_old", "iteration", "sample"]
-            )
-
-        Q_hist = update_Q_hist(Q_hist, ze, i, Nc)
-        W = update_weights(E, X, M_inv, sigma2, dTinv, M, q)
 
         # Exit the loop if convergence is reached
         if np.max(np.abs(phi - phi_old)) < 0.001:

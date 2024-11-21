@@ -85,7 +85,7 @@ def process_expression_data(
 
     N, Ng = E.shape
 
-    return E, E_full, clock_coord, N, Ng
+    return E, E_full, N, Ng
 
 
 def circular_deviation(x, y, period=2 * np.pi):

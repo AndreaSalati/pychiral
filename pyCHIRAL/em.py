@@ -10,8 +10,51 @@ from scipy.special import iv  # Modified Bessel function of the first kind
 # same order as they are defined in this file
 
 
-def EM_Step():
-    pass
+def EM_step(phi, T, E, sigma2, Nc, Ng, i, TSM, dTinv, q, W, Q_hist):
+    phi_old, alpha, M, M_inv, XTX, X, X_old = update_matrices(phi, T, E, sigma2, Nc)
+
+    # If two-state model is off, reset weights to initial values
+    if not TSM:
+        W = np.ones(Ng)
+
+    Tot = np.sum(W)  # Total sum of weights
+
+    K, Om, A, B, C, D = solve_lagrange(alpha, M_inv, E, sigma2, W, Tot, i)
+    # Ensure no NaN values in Om
+    if np.any(np.isnan(Om)):
+        return {"alpha": alpha, "weights": W, "iteration": i}
+
+    # Apply find_roots function for each column of Om
+    rooted = np.apply_along_axis(find_roots, 0, Om, A, B, C, D)
+
+    # Test roots to find the minimum (corresponds to the minimum of the Q function)
+    # Vectorized version of the function
+    possible_solutions = evaluate_possible_solutions(
+        rooted, K, Om, alpha, E, W, sigma2, M_inv, Tot, phi_old, Ng
+    )
+    # Extract Q values (the third column)
+    Q_values = possible_solutions[:, :, 2]  # Shape: [Nroots, Nc]
+
+    # Find the indices of the minimum Q value for each observation
+    min_indices = np.argmin(Q_values, axis=0)  # Shape: [Nc]
+
+    # Extract the minimum Q values
+    min_Q_values = Q_values[min_indices, np.arange(Q_values.shape[1])]  # Shape: [Nc]
+
+    # Check for invalid solutions
+    if np.any(min_Q_values == 1e5):
+        raise ValueError("No solution found on the circle for some observations")
+
+    # Extract the corresponding solutions # Shape: [Nc, 4]
+    ze = possible_solutions[min_indices, np.arange(Q_values.shape[1]), :]
+    # Update phi using the best root solutions
+    ze = np.array(ze).T
+    phi = np.arctan2(ze[1, :], ze[0, :]) % (2 * np.pi)
+
+    Q_hist = update_Q_hist(Q_hist, ze, i, Nc)
+    W = update_weights(E, X, M_inv, sigma2, dTinv, M, q)
+    # T is fixed
+    return phi, phi_old, Q_hist, W, alpha, XTX, X, X_old
 
 
 def EM_initialization(E, sigma2=None, u=None, tau2=None):
@@ -65,18 +108,17 @@ def update_matrices(phi, T, E, sigma2, N):
     X_old = X.copy()
 
     # Matrix multiplication and inversion for parameter updates
-    Nn = X.T @ X  # This is t(X) %*% X in R
-    Nn_inv = inv(Nn)  # Inverse of Nn
+    XTX = X.T @ X  # This is t(X) %*% X in R
 
     T_inv = inv(T)  # Inverse of the T matrix (covariance of gene's coefficients)
-    M = Nn + sigma2 * T_inv  # M = Nn + sigma2 * Tinv
+    M = XTX + sigma2 * T_inv
     M_inv = inv(M)  # Inverse of M
 
     # Update the alpha parameters
     alpha = M_inv @ X.T @ E
     alpha = alpha.T  # Transpose back to match R's convention
 
-    return phi_old, alpha, M, M_inv, Nn, X, X_old
+    return phi_old, alpha, M, M_inv, XTX, X, X_old
 
 
 def solve_lagrange(alpha, M_inv, E, sigma2, W, Tot, i):
