@@ -44,7 +44,7 @@ def phase_initialization_mf(J, beta, n_samples, A_0=0.1, iter_mf=1000):
         J (numpy.ndarray): Interaction matrix.
         beta (float): Temperature-like parameter controlling phase interactions.
         n_samples (int): Number of samples (columns of expression matrix).
-        A_0 (float): Initial condition for the order parameter A.
+        A_0 (float): Initial condition for the order parameter A (amplitude).
         iterations (int): Maximum number of iterations.
 
     Returns:
@@ -71,4 +71,4 @@ def phase_initialization_mf(J, beta, n_samples, A_0=0.1, iter_mf=1000):
         Theta = np.arctan2(Zeta[:, 1], Zeta[:, 0])
         A = np.where(mod <= 20, iv(1, mod) / iv(0, mod), 1)
 
-    return np.column_stack([A, Theta % (2 * np.pi)])
+    return Theta

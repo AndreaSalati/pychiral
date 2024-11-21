@@ -26,6 +26,7 @@ def CHIRAL(
     layer=None,
     iter_em=500,
     iter_mf=1000,
+    add_noise_mf_phase=False,
     tau2=None,
     u=None,
     sigma2=None,
@@ -44,6 +45,7 @@ def CHIRAL(
         - layer (string): Layer of the data to use, default is None, which useses adata.X
         - iter_mf (int): Number of iterations for the mean field approximation, default is 1000.
         - iter_em (int): Number of maximum iterations. Default is 500.
+        - add_noise_mf_phase (bool): Whether to add noise to the initial phase from mf, default is False.
         - tau2 (float): Tau parameter for the prior on gene coefficient, default is None.
         - u (float): u parameter for the prior on gene means, default is None.
         - sigma2 (float): Standard deviation of data points for prediction, default is None.
@@ -59,7 +61,6 @@ def CHIRAL(
     """
 
     E, E_full, Nc, Ng = process_expression_data(E, clockgenes, ccg, layer, standardize)
-
     phi = phi_start
 
     # Initializing phase using spin glass model (or any other method)
@@ -67,8 +68,11 @@ def CHIRAL(
         # Use the spin glass initialization (for now, we skip implementation of J.tilde and Zeta.mf.ordered)
         beta = 1000
         J = J_tilde(E)
-        Zeta = phase_initialization_mf(J, beta, E.shape[0], iter_mf=iter_mf)
-        phi = Zeta[:, 1] + np.random.uniform(-0.5, 0.5, size=Nc)
+        Theta = phase_initialization_mf(J, beta, E.shape[0], iter_mf=iter_mf)
+        phi = Theta
+        if add_noise_mf_phase:
+            phi += np.random.uniform(-0.5, 0.5, size=Nc)
+            phi % (2 * np.pi)
 
     sigma2, u, tau2, T, S, W = EM_initialization(E, sigma2, u, tau2)
     dTinv = 1 / det(T)

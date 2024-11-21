@@ -104,7 +104,7 @@ def circular_deviation(x, y, period=2 * np.pi):
     return np.minimum(v1, v2)
 
 
-def optimal_shift(p, p0, n_s=200, return_mad=True):
+def optimal_shift(p, p0, n_s=200):
     """
     Aligns two sequences defined on the unit circle, taking care of the periodicity
     and the flipping symmetry of the circle.
@@ -131,10 +131,9 @@ def optimal_shift(p, p0, n_s=200, return_mad=True):
     # selecting which direction is the best
     if mad < mad_neg:
         phi_aligned = theta_cs[:, best_shift_ind]
+        best_mad = mad
     else:
         phi_aligned = theta_cs_neg[:, best_shift_ind_neg]
+        best_mad = mad_neg
 
-    if return_mad:
-        return phi_aligned, mad
-    else:
-        return phi_aligned
+    return phi_aligned, best_mad
