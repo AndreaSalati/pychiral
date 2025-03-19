@@ -1,6 +1,6 @@
-# pyCHIRAL
+# pychiral
 
-**pyCHIRAL** is a Python implementation of **CHIRAL** (Circular HIerarchical Reconstruction ALgorithm), an R package originally developed by Lorenzo Talamanca, designed to infer circadian clock phases from RNA-seq data. This algorithm is based on **Expectation Maximization** and utilizes a **Statistical Physics-inspired approach**.
+**pychiral** is a Python implementation of **CHIRAL** (Circular HIerarchical Reconstruction ALgorithm), an R package originally developed by Lorenzo Talamanca, designed to infer circadian clock phases from RNA-seq data. This algorithm is based on **Expectation Maximization** and utilizes a **Statistical Physics-inspired approach**.
 
 ## Features
 
@@ -14,14 +14,14 @@ For the original R version of this package, visit the **CHIRAL** repository [her
 
 ## Installation
 
-To run pyCHIRAL, you need to install the following dependencies:
+To run pychiral, you need to install the following dependencies:
 
 ```bash
-conda install tqdm numpy pandas scipy anndata scanpy
+pip install .
 ```
 
 ## Usage
-pyCHIRAL is compatible with anndata, and it receives data in the format Nsamples x Ngenes (unlike the Bulk conventions).
+pychiral is compatible with anndata, and it receives data in the format Nsamples x Ngenes (unlike the Bulk conventions).
 A layer of the dataset needs to be specified by argument. 
 The layer passed to CHIRAL needs to be **log-tranformed**. By default the data will also be mean centered and standardized.
 
