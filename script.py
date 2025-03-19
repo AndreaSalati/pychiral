@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import scanpy as sc
 
-from pyCHIRAL import CHIRAL, ccg
+from pyCHIRAL import CHIRAL, ccg, optimal_shift
 
 # path = "/Users/salati/Documents/CODE/github/scCircadianMeta/data/BULK/adata_liver_bulk.h5ad"
 
@@ -18,25 +18,7 @@ adata2 = adata[adata.obs.organ == organ]
 ccg = np.intersect1d(adata2.var_names, ccg)
 
 res = CHIRAL(adata2, clockgenes=ccg, layer="s_log")
-
 true_phase = (adata2.obs.ZT % 24) * 2 * np.pi / 24
 
 phi = res["phi"]
-
 plt.scatter(true_phase, phi)
-
-
-# np.apply_along_axis
-# create a pd.dataframe that I will import in R
-# df = pd.DataFrame(
-#     adata.layers["s_log"].T, index=adata.var_names, columns=adata.obs_names
-# )
-
-# print(df)
-# adata.layers["s_log"]
-# df.to_csv("s_log.csv")
-
-# md = adata.obs.ZT
-# # convert to float
-# md = md.astype(float)
-# md.to_csv("ZTmod.csv")
