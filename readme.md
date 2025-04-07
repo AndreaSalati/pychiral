@@ -2,10 +2,14 @@
 
 **pychiral** is a Python implementation of **CHIRAL** (Circular HIerarchical Reconstruction ALgorithm), an R package originally developed by Lorenzo Talamanca, designed to infer circadian clock phases from RNA-seq data. This algorithm is based on **Expectation Maximization** and utilizes a **Statistical Physics-inspired approach**.
 
+## TO implement:
+- posteriors via grid eval
+- PCA init
+
 ## Features
 
 - Efficiently infers circadian clock phases from RNA-seq data.
-- Incorporates an advanced Expectation Maximization algorithm.
+- Incorporates Expectation Maximization algorithm.
 - Inspired by methods from Statistical Physics.
   
 This method was applied in the following Science paper: [Sex-dimorphic and age-dependent organization of 24-hour gene expression rhythms in humans](https://www.science.org/doi/10.1126/science.add0846). Further information regarding the alorithm can be found in the supplement.
