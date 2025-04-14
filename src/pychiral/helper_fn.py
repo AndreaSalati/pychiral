@@ -75,6 +75,8 @@ def process_expression_data(
     else:
         E = E.layers[layer]
 
+    E = E.toarray() if hasattr(E, "toarray") else E
+
     # Clock gene selection
     clock_coord = ind2(genes, clockgenes)
     E = E[:, clock_coord]
