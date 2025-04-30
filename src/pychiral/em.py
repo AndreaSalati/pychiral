@@ -229,7 +229,8 @@ def evaluate_possible_solutions(
     O_j = O[:, valid_indices[1]].T  # Shape: [N_valid, 2]
 
     # Solve K_lambda * zet = O_j
-    zet = np.linalg.solve(K_lambda, O_j)  # Shape: [N_valid, 2]
+    zet = np.linalg.solve(K_lambda, O_j[..., None])  # Shape: [N_valid, 2]
+    zet = zet.squeeze()  # Remove the last dimension
 
     # Compute phit from zet
     phit = np.arctan2(zet[:, 1], zet[:, 0]) % (2 * np.pi)  # Shape: [N_valid]
